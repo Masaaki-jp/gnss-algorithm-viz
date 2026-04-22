@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <!-- PALETTE: Vibrant Tech (Cyan: #06B6D4, Amber: #F59E0B, Pink: #EC4899, Emerald: #10B981, Purple: #8B5CF6, Slate: #0F172A) -->
+    <!-- NO MERMAID JS NOR SVG WERE USED IN THIS OUTPUT -->
+    <!-- PLAN SUMMARY: 1. Intro/Hook on GNSS ubiquity. 2. Core Principle (Trilateration visual using pure HTML/CSS). 3. Error Sources (Donut Chart showing signal degradation). 4. Positioning Methods (Logarithmic Bar Chart comparing accuracy). 5. Global Constellations (Radar Chart comparing system capabilities). Conclusion summarizing multi-GNSS future. -->
+    <!-- CHART CHOICES: Error Sources -> Inform/Composition -> Donut Chart (Chart.js, best for proportional breakdown). Positioning Methods -> Compare -> Horizontal Bar Chart (Chart.js, logarithmic scale optimal for 5m vs 1cm variance). Constellations -> Relationships/Multi-variable -> Radar Chart (Chart.js, optimal for comparing systems across multiple performance axes). Diagram -> HTML/CSS (Adhering to strict NO SVG/Mermaid rule). -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNSSにおける位置情報特定のアルゴリズム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Roboto:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans JP', 'Roboto', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 320px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 380px; } }
+        
+        .orbit-container { position: relative; width: 100%; height: 350px; display: flex; justify-content: center; align-items: center; overflow: hidden; background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%); border-radius: 1rem; box-shadow: inset 0 0 50px rgba(0,0,0,0.5); }
+        .orbit-ring { position: absolute; border: 1px dashed rgba(6, 182, 212, 0.3); border-radius: 50%; aspect-ratio: 1/1; animation: pulse 4s infinite linear; }
+        .ring-1 { width: 150px; }
+        .ring-2 { width: 250px; animation-delay: 1s; }
+        .ring-3 { width: 350px; animation-delay: 2s; border-color: rgba(245, 158, 11, 0.2); }
+        .earth-core { position: absolute; z-index: 20; background-color: #06b6d4; color: #0f172a; width: 70px; height: 70px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: 900; font-size: 0.8rem; box-shadow: 0 0 30px rgba(6, 182, 212, 0.8); }
+        
+        .satellite { position: absolute; z-index: 10; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; color: #0f172a; display: flex; align-items: center; gap: 0.25rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .sat-x { top: 15%; left: 15%; background-color: #f59e0b; }
+        .sat-y { top: 25%; right: 10%; background-color: #f59e0b; }
+        .sat-z { bottom: 20%; left: 10%; background-color: #f59e0b; }
+        .sat-t { bottom: 15%; right: 20%; background-color: #ec4899; color: white; box-shadow: 0 0 15px rgba(236, 72, 153, 0.6); }
+        
+        .signal-line { position: absolute; height: 1px; z-index: 5; transform-origin: left center; }
+        .line-1 { width: 140px; background: linear-gradient(90deg, rgba(245,158,11,0.8), transparent); top: 18%; left: 24%; transform: rotate(42deg); }
+        .line-2 { width: 160px; background: linear-gradient(270deg, rgba(245,158,11,0.8), transparent); top: 28%; right: 22%; transform: rotate(-35deg); transform-origin: right center; }
+        .line-3 { width: 140px; background: linear-gradient(90deg, rgba(245,158,11,0.8), transparent); bottom: 23%; left: 21%; transform: rotate(-38deg); }
+        .line-4 { width: 130px; background: linear-gradient(270deg, rgba(236,72,153,0.8), transparent); bottom: 18%; right: 30%; transform: rotate(45deg); transform-origin: right center; }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 0.3; }
+            100% { transform: scale(0.9); opacity: 0.8; }
+        }
+
+        .stat-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .glow-text-cyan { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
+        .glow-text-amber { text-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+    </style>
+</head>
+<body class="antialiased pb-20">
+
+    <header class="pt-16 pb-12 px-6 border-b border-slate-800 bg-slate-900 sticky top-0 z-50 shadow-2xl">
+        <div class="max-w-5xl mx-auto text-center">
+            <h1 class="text-4xl md:text-5xl font-black mb-4 tracking-tight glow-text-cyan text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">GNSSアルゴリズムと位置特定の科学</h1>
+            <p class="text-slate-300 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
+                スマートフォンや自動運転車が現在地を「数センチ単位」で把握する裏側には、宇宙空間と地球を結ぶ高度な数学と物理学が存在します。本レポートでは、GNSS（全球測位衛星システム）のデータ処理メカニズムを解き明かします。
+            </p>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-6 py-12 space-y-24">
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+                <div class="inline-block px-3 py-1 mb-4 rounded-full bg-cyan-900/50 text-cyan-400 border border-cyan-700 text-sm font-bold tracking-wider">CORE PRINCIPLE</div>
+                <h2 class="text-3xl font-bold mb-6">三辺測量と第4の次元「時間」</h2>
+                <p class="text-slate-300 mb-4 leading-relaxed">
+                    GNSSの基本原理は<strong>「三辺測量（Trilateration）」</strong>です。衛星から発信された電波が受信機に到達するまでの時間を計測し、それに光の速度（秒速約30万km）を掛けることで、衛星と受信機の距離を算出します。
+                </p>
+                <p class="text-slate-300 mb-6 leading-relaxed">
+                    3つの衛星のデータがあれば、3つの球体が交わる点として地球上の3次元座標（X: 緯度, Y: 経度, Z: 高度）を計算できます。しかし、受信機の時計は衛星の高精度な原子時計と比べて誤差が生じるため、正確な「時間（t）」を補正するために<strong>必ず4つ目の衛星</strong>が必要不可欠となります。
+                </p>
+                <div class="flex gap-4">
+                    <div class="stat-card p-4 rounded-lg flex-1">
+                        <div class="text-xs text-slate-400 font-bold mb-1">計算式</div>
+                        <div class="text-xl font-mono text-cyan-400">d = c × Δt</div>
+                    </div>
+                    <div class="stat-card p-4 rounded-lg flex-1">
+                        <div class="text-xs text-slate-400 font-bold mb-1">必要最小衛星数</div>
+                        <div class="text-2xl font-black text-amber-400">4<span class="text-sm font-normal text-slate-300 ml-1">機</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="orbit-container">
+                <div class="orbit-ring ring-1"></div>
+                <div class="orbit-ring ring-2"></div>
+                <div class="orbit-ring ring-3"></div>
+                
+                <div class="earth-core">受信機</div>
+                
+                <div class="satellite sat-x"><span>●</span> Sat 1 (X)</div>
+                <div class="satellite sat-y"><span>●</span> Sat 2 (Y)</div>
+                <div class="satellite sat-z"><span>●</span> Sat 3 (Z)</div>
+                <div class="satellite sat-t"><span>★</span> Sat 4 (Time)</div>
+                
+                <div class="signal-line line-1"></div>
+                <div class="signal-line line-2"></div>
+                <div class="signal-line line-3"></div>
+                <div class="signal-line line-4"></div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div class="order-2 lg:order-1 stat-card rounded-2xl p-6">
+                <h3 class="text-center text-lg font-bold mb-4 text-slate-300">測位誤差の主な要因と割合</h3>
+                <div class="chart-container">
+                    <canvas id="errorDonutChart"></canvas>
+                </div>
+            </div>
+
+            <div class="order-1 lg:order-2">
+                <div class="inline-block px-3 py-1 mb-4 rounded-full bg-pink-900/50 text-pink-400 border border-pink-700 text-sm font-bold tracking-wider">ERROR SOURCES</div>
+                <h2 class="text-3xl font-bold mb-6">精度を低下させる「見えない壁」</h2>
+                <p class="text-slate-300 mb-4 leading-relaxed">
+                    宇宙空間から発信された信号が私たちのスマートフォンに届くまでの約2万キロメートルの旅路には、測位精度を低下させる様々な障害が存在します。
+                </p>
+                <ul class="space-y-4 mb-6">
+                    <li class="flex items-start">
+                        <span class="text-cyan-400 mr-2 mt-1">■</span>
+                        <div>
+                            <strong class="text-white block">電離層遅延 (Ionospheric Delay)</strong>
+                            <span class="text-sm text-slate-400">地球を取り巻くプラズマ層を電波が通過する際、伝播速度が遅くなる現象。最大の誤差要因です。</span>
+                        </div>
+                    </li>
+                    <li class="flex items-start">
+                        <span class="text-amber-400 mr-2 mt-1">■</span>
+                        <div>
+                            <strong class="text-white block">マルチパス (Multipath)</strong>
+                            <span class="text-sm text-slate-400">高層ビルや山などに電波が反射し、直接波とは異なる経路（複数経路）で受信機に到達することによるズレ。</span>
+                        </div>
+                    </li>
+                </ul>
+                <p class="text-slate-400 text-sm italic">
+                    高度なGNSSアルゴリズムは、複数周波数の受信や統計モデルを用いてこれらの誤差をリアルタイムで補正しています。
+                </p>
+            </div>
+        </section>
+
+        <section>
+            <div class="text-center mb-12">
+                <div class="inline-block px-3 py-1 mb-4 rounded-full bg-emerald-900/50 text-emerald-400 border border-emerald-700 text-sm font-bold tracking-wider">EVOLUTION OF ACCURACY</div>
+                <h2 class="text-3xl font-bold mb-4">測位アルゴリズムの進化と精度比較</h2>
+                <p class="text-slate-300 max-w-3xl mx-auto leading-relaxed">
+                    単なるコード（擬似雑音系列）の到達時間を利用する従来の測位から、電波の「波（搬送波位相）」そのものを定規として利用するアルゴリズムへの進化により、誤差はメートル級からセンチメートル級へと劇的に改善しました。
+                </p>
+            </div>
+
+            <div class="stat-card rounded-2xl p-6 md:p-8">
+                <div class="chart-container" style="max-width: 900px;">
+                    <canvas id="accuracyBarChart"></canvas>
+                </div>
+                <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 text-center">
+                        <div class="text-emerald-400 font-bold mb-2">単独測位 (スマホ等)</div>
+                        <div class="text-3xl font-black mb-1">~ 5<span class="text-lg">m</span></div>
+                        <div class="text-xs text-slate-400">一般的なコード測位。日常的なナビゲーションに利用。</div>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 text-center">
+                        <div class="text-cyan-400 font-bold mb-2">PPP (精密単独測位)</div>
+                        <div class="text-3xl font-black mb-1">~ 10<span class="text-lg">cm</span></div>
+                        <div class="text-xs text-slate-400">基準局不要で世界中どこでも高精度。軌道・時計誤差を極限まで補正。</div>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 border-b-4 border-b-pink-500 text-center">
+                        <div class="text-pink-400 font-bold mb-2">RTK (リアルタイムキネマティック)</div>
+                        <div class="text-3xl font-black mb-1">~ 1<span class="text-lg">cm</span></div>
+                        <div class="text-xs text-slate-400">固定基準局の補正データと搬送波位相解析を組み合わせる究極の精度。自動運転の要。</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+                <div class="inline-block px-3 py-1 mb-4 rounded-full bg-purple-900/50 text-purple-400 border border-purple-700 text-sm font-bold tracking-wider">GLOBAL CONSTELLATIONS</div>
+                <h2 class="text-3xl font-bold mb-6">マルチGNSS時代の到来</h2>
+                <p class="text-slate-300 mb-4 leading-relaxed">
+                    かつて「GPS」と言えばアメリカのシステムのみを指していましたが、現在は欧州、ロシア、中国などが独自の巨大な衛星群（コンステレーション）を構築しています。
+                </p>
+                <p class="text-slate-300 mb-6 leading-relaxed">
+                    現代の受信機はこれらの複数システムの信号を同時に処理する<strong>「マルチGNSS」アルゴリズム</strong>を搭載しています。これにより、ビルの谷間など空が狭い場所でも、常に十分な数の衛星を捕捉し、安定した測位計算が可能になっています。日本の「みちびき（QZSS）」もこの精度向上に大きく貢献しています。
+                </p>
+            </div>
+            
+            <div class="stat-card rounded-2xl p-6">
+                <h3 class="text-center text-lg font-bold mb-2 text-slate-300">主要GNSSシステムの能力比較スコア</h3>
+                <div class="chart-container">
+                    <canvas id="constellationRadarChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-slate-800 bg-slate-900 py-8 text-center text-slate-500 text-sm">
+        <p>Data Visualization on GNSS Algorithms & Positioning Accuracy.</p>
+        <p class="mt-2">Generated for Analytical Infographic Representation.</p>
+    </footer>
+
+    <script>
+        const wrapLabel = (label, maxLength = 16) => {
+            if (label.length <= maxLength) return label;
+            const words = label.split(' ');
+            if (words.length === 1) {
+                const chunks = [];
+                for (let i = 0; i < label.length; i += maxLength) {
+                    chunks.push(label.substring(i, i + maxLength));
+                }
+                return chunks;
+            }
+            const lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                if ((currentLine + word).length > maxLength) {
+                    if (currentLine.trim() !== '') lines.push(currentLine.trim());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine.trim() !== '') lines.push(currentLine.trim());
+            return lines;
+        };
+
+        const standardTooltipConfig = {
+            callbacks: {
+                title: function(tooltipItems) {
+                    const item = tooltipItems[0];
+                    let label = item.chart.data.labels[item.dataIndex];
+                    if (Array.isArray(label)) {
+                        return label.join(' ');
+                    } else {
+                        return label;
+                    }
+                }
+            }
+        };
+
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Noto Sans JP', sans-serif";
+
+        const donutLabels = [
+            '電離層遅延 (Ionospheric Delay)',
+            'マルチパス (Multipath Error)',
+            '対流圏遅延 (Tropospheric Delay)',
+            '衛星時計誤差 (Satellite Clock Error)',
+            '軌道誤差 (Orbit Error)'
+        ].map(l => wrapLabel(l));
+
+        const ctxDonut = document.getElementById('errorDonutChart').getContext('2d');
+        new Chart(ctxDonut, {
+            type: 'doughnut',
+            data: {
+                labels: donutLabels,
+                datasets: [{
+                    data: [50, 20, 10, 10, 10],
+                    backgroundColor: [
+                        '#06b6d4', 
+                        '#f59e0b', 
+                        '#ec4899', 
+                        '#10b981', 
+                        '#8b5cf6'  
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#f8fafc', font: { size: 11 } }
+                    },
+                    tooltip: standardTooltipConfig
+                }
+            }
+        });
+
+        const barLabels = [
+            '単独測位 (Standalone GNSS)',
+            'DGPS (ディファレンシャルGPS)',
+            'PPP (精密単独測位)',
+            'RTK (リアルタイムキネマティック)'
+        ].map(l => wrapLabel(l));
+
+        const ctxBar = document.getElementById('accuracyBarChart').getContext('2d');
+        new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: barLabels,
+                datasets: [{
+                    label: '測位誤差 (cm) ※値が小さいほど高精度',
+                    data: [500, 100, 10, 1],
+                    backgroundColor: [
+                        'rgba(148, 163, 184, 0.6)', 
+                        'rgba(6, 182, 212, 0.7)',   
+                        'rgba(245, 158, 11, 0.8)',  
+                        'rgba(236, 72, 153, 0.9)'   
+                    ],
+                    borderColor: [
+                        '#94a3b8',
+                        '#06b6d4',
+                        '#f59e0b',
+                        '#ec4899'
+                    ],
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'logarithmic',
+                        title: {
+                            display: true,
+                            text: '測位誤差 (cm) [対数スケール]',
+                            color: '#cbd5e1'
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: {
+                            callback: function(value) {
+                                if (value === 1 || value === 10 || value === 100 || value === 500) {
+                                    return value + ' cm';
+                                }
+                                return '';
+                            }
+                        }
+                    },
+                    y: {
+                        grid: { display: false }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: standardTooltipConfig
+                }
+            }
+        });
+
+        const radarLabels = [
+            '運用衛星数 (Satellites)',
+            '信号多様性 (Signals)',
+            '測位精度 (Accuracy)',
+            'カバー範囲 (Coverage)',
+            '近代化進捗 (Modernization)'
+        ].map(l => wrapLabel(l));
+
+        const ctxRadar = document.getElementById('constellationRadarChart').getContext('2d');
+        new Chart(ctxRadar, {
+            type: 'radar',
+            data: {
+                labels: radarLabels,
+                datasets: [
+                    {
+                        label: 'GPS (米国)',
+                        data: [85, 80, 90, 100, 80],
+                        backgroundColor: 'rgba(6, 182, 212, 0.2)',
+                        borderColor: '#06b6d4',
+                        pointBackgroundColor: '#06b6d4',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Galileo (欧州)',
+                        data: [70, 95, 95, 100, 95],
+                        backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                        borderColor: '#ec4899',
+                        pointBackgroundColor: '#ec4899',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'BeiDou (中国)',
+                        data: [100, 85, 85, 95, 90],
+                        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                        borderColor: '#f59e0b',
+                        pointBackgroundColor: '#f59e0b',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        pointLabels: {
+                            color: '#e2e8f0',
+                            font: { size: 11 }
+                        },
+                        ticks: { display: false, min: 0, max: 100 }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#f8fafc' }
+                    },
+                    tooltip: standardTooltipConfig
+                }
+            }
+        });
+    </script>
+</body>
+</html>
